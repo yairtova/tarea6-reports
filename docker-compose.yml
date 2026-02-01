@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: superpassword123
+      POSTGRES_DB: report_db
+    ports:
+      - "5432:5432"
+    volumes:
+      # Ejecuta automáticamente todos los .sql en orden alfabético
+      - ./db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d report_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: nextjs_app
+    ports:
+      - "3000:3000"
+    environment:
+      # Conexión usando el rol limitado que creamos [cite: 45]
+      DATABASE_URL: "postgresql://app_report_user:NextReports2026@db:5432/report_db"
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
