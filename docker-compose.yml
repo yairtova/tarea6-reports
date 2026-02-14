@@ -4,16 +4,15 @@ services:
     container_name: postgres_db
     restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: superpassword123
-      POSTGRES_DB: report_db
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-superpassword123}
+      POSTGRES_DB: ${POSTGRES_DB:-report_db}
     ports:
       - "5432:5432"
     volumes:
-      # Ejecuta automáticamente todos los .sql en orden alfabético
       - ./db:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d report_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-report_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,8 +23,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Conexión usando el rol limitado que creamos [cite: 45]
-      DATABASE_URL: "postgresql://app_report_user:NextReports2026@db:5432/report_db"
+      DATABASE_URL: ${DATABASE_URL}
       NODE_ENV: production
     depends_on:
       db:
