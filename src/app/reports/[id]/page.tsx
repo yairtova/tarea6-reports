@@ -1,102 +1,74 @@
 import { query } from "@/lib/db";
 import { z } from "zod";
 import Link from "next/link";
+import { getReport } from "@/lib/reports";
+  
 
-// Esquema de validación con Zod para filtros y paginación 
 const QuerySchema = z.object({
-  limit: z.coerce.number().min(1).max(100).default(5),
+  limit: z.coerce.number().min(1).max(100).default(10),
   offset: z.coerce.number().min(0).default(0),
-  search: z.string().optional(), // Filtro de búsqueda opcional [cite: 74]
 });
 
-export default async function ReportPage({ 
-  params, 
-  searchParams 
-}: { 
-  params: Promise<{ id: string }>,
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
+const reportMeta: Record<string, { title: string; insight: string }> = {
+  "1": { title: "Rendimiento por Categoría", insight: "Identifica qué familias de productos generan el mayor margen de contribución." },
+  "2": { title: "Ranking de Clientes", insight: "Clasificación de usuarios basada en su valor de vida (LTV) mediante Window Functions." },
+  "3": { title: "Stock Crítico", insight: "Alerta de inventario bajo para productos con alta demanda histórica (uso de HAVING)." },
+  "4": { title: "Análisis de Estatus", insight: "Distribución del flujo de caja según el estado de las órdenes (CASE/COALESCE)." },
+  "5": { title: "Resumen Ejecutivo", insight: "Comparativa de rendimiento individual frente al promedio global del sistema (CTE)." },
+};
+
+export default async function ReportPage({ params, searchParams }: any) {
   const { id } = await params;
-  const sParams = await searchParams;
-
-  // 1. Validar parámetros con Zod [cite: 69, 74]
-  const { limit, offset, search } = QuerySchema.parse(sParams);
-
+  const { limit, offset } = QuerySchema.parse(await searchParams);
+  
   const views: Record<string, string> = {
-    "1": "view_rendimiento_categorias",
-    "2": "view_top_clientes",
-    "3": "view_stock_critico",
-    "4": "view_analisis_estatus",
-    "5": "view_resumen_ejecutivo",
+    "1": "view_rendimiento_categorias", "2": "view_top_clientes",
+    "3": "view_stock_critico", "4": "view_analisis_estatus", "5": "view_resumen_ejecutivo",
   };
 
   const viewName = views[id];
-  if (!viewName) return <div>Reporte no encontrado</div>;
+  if (!viewName) return <div className="p-10 text-center">Reporte no encontrado</div>;
 
-  // 2. Query Parametrizada con Paginación y Filtro [cite: 70, 75]
-  // Nota: En un entorno real, el filtro 'search' dependería de las columnas de la VIEW.
-  const sql = `SELECT * FROM ${viewName} LIMIT $1 OFFSET $2`;
-  const result = await query(sql, [limit, offset]);
+  const result = await getReport(id, limit, offset);
+
+
+
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold capitalize">{viewName.replace(/_/g, ' ')}</h1>
-        <p className="text-gray-600">Visualización de métricas y datos críticos del sistema.</p>
+    <div className="max-w-7xl mx-auto p-6 space-y-8">
+      <header className="border-b pb-4">
+        <h1 className="text-4xl font-extrabold text-white">{reportMeta[id].title}</h1>
+        <p className="text-lg text-blue-300 mt-2">{reportMeta[id].insight}</p>
       </header>
 
-      {/* KPI Destacado [cite: 59] */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-blue-100 flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-500 font-medium">Registros en esta página</p>
-          <p className="text-3xl font-bold text-blue-600">{result.rowCount}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-sm text-gray-500 font-medium">Página Actual</p>
-          <p className="text-xl font-semibold">{(offset / limit) + 1}</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <p className="text-sm text-blue-700 font-semibold">KPI: Registros Cargados</p>
+          <p className="text-2xl font-bold">{result.rowCount}</p>
         </div>
       </div>
 
-      {/* Tabla de Resultados [cite: 58] */}
-      <div className="overflow-hidden bg-white rounded-lg shadow border">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="overflow-x-auto shadow-xl rounded-xl border border-gray-200">
+        <table className="min-w-full bg-white">
+          <thead className="bg-gray-800 text-white">
             <tr>
-              {result.fields.map((f) => (
-                <th key={f.name} className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {f.name}
-                </th>
-              ))}
+              {result.fields.map(f => <th key={f.name} className="px-6 py-3 text-left text-xs uppercase font-bold">{f.name}</th>)}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200">
             {result.rows.map((row, i) => (
-              <tr key={i} className="hover:bg-blue-50/50 transition-colors">
-                {Object.values(row).map((val: any, j) => (
-                  <td key={j} className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {val?.toString() || "N/A"}
-                  </td>
-                ))}
+              <tr key={i} className="hover:bg-gray-50 transition-colors">
+                {Object.values(row).map((val: any, j) => <td key={j} className="px-6 py-4 text-sm text-gray-600">{val?.toString() || "—"}</td>)}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Controles de Paginación  */}
-      <div className="flex justify-between items-center">
-        <Link 
-          href={`/reports/${id}?limit=${limit}&offset=${Math.max(0, offset - limit)}`}
-          className={`px-4 py-2 rounded border ${offset === 0 ? 'bg-gray-100 text-gray-400 pointer-events-none' : 'bg-white hover:bg-gray-50'}`}
-        >
-          Anterior
-        </Link>
-        <Link 
-          href={`/reports/${id}?limit=${limit}&offset=${offset + limit}`}
-          className="px-4 py-2 rounded border bg-white hover:bg-gray-50"
-        >
-          Siguiente
-        </Link>
+      <div className="flex justify-between items-center pt-4">
+        <Link href={`/reports/${id}?limit=${limit}&offset=${Math.max(0, offset - limit)}`} className="px-6 py-2 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 transition">Anterior</Link>
+        <span className="text-sm font-medium text-white">Página {(offset/limit) + 1}</span>
+        <Link href={`/reports/${id}?limit=${limit}&offset=${offset + limit}`} className="px-6 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition">Siguiente</Link>
       </div>
     </div>
   );

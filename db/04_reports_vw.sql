@@ -27,15 +27,18 @@ GROUP BY c.nombre;
 -- Métricas: Total gastado, ranking de importancia
 -- Por qué: Usa RANK() para determinar la posición del cliente según sus compras.
 -- ============================================
-CREATE VIEW view_top_clientes AS
+CREATE OR REPLACE VIEW view_top_clientes AS
 SELECT 
-    u.nombre AS cliente,
-    u.email,
-    SUM(o.total) AS inversion_total,
-    RANK() OVER (ORDER BY SUM(o.total) DESC) AS ranking_lealtad
-FROM usuarios u
-JOIN ordenes o ON u.id = o.usuario_id
-GROUP BY u.id, u.nombre, u.email;
+  c.id AS cliente_id,
+  c.nombre,
+  COUNT(o.id) AS total_ordenes,
+  SUM(o.total) AS gasto_total,
+  ROUND(SUM(o.total) / NULLIF(COUNT(o.id),0), 2) AS promedio_compra,
+  RANK() OVER (ORDER BY SUM(o.total) DESC) AS ranking
+FROM clientes c
+JOIN ordenes o ON o.cliente_id = c.id
+GROUP BY c.id, c.nombre;
+
 
 -- VERIFY: SELECT * FROM view_top_clientes WHERE ranking_lealtad <= 3;
 
@@ -45,17 +48,21 @@ GROUP BY u.id, u.nombre, u.email;
 -- Métricas: Stock actual, ingresos generados
 -- Por qué: Usa HAVING para filtrar solo productos con stock bajo (< 10).
 -- ============================================
-CREATE VIEW view_stock_critico AS
+CREATE OR REPLACE VIEW view_stock_critico AS
 SELECT 
-    p.nombre AS producto,
-    p.stock,
-    c.nombre AS categoria,
-    SUM(od.cantidad) AS unidades_vendidas
+  p.id AS producto_id,
+  p.nombre,
+  p.stock,
+  COALESCE(SUM(od.cantidad),0) AS unidades_vendidas,
+  ROUND(
+    COALESCE(SUM(od.cantidad),0)::numeric / NULLIF(p.stock,0) * 100,
+    2
+  ) AS porcentaje_vendido
 FROM productos p
-JOIN categorias c ON p.categoria_id = c.id
-LEFT JOIN orden_detalles od ON p.id = od.producto_id
-GROUP BY p.id, p.nombre, p.stock, c.nombre
-HAVING p.stock < 10 OR SUM(od.cantidad) > 100;
+LEFT JOIN orden_detalle od ON od.producto_id = p.id
+GROUP BY p.id, p.nombre, p.stock
+HAVING p.stock < 20;
+
 
 -- VERIFY: SELECT * FROM view_stock_critico ORDER BY stock ASC;
 
