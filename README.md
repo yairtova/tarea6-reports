@@ -60,13 +60,33 @@ Paginación Server-Side: Los reportes soportan paginación mediante parámetros 
 
 Seguridad en Consultas: Se utilizan queries parametrizadas ($1, $2) para prevenir cualquier intento de inyección SQL.
 
-✅ Checklist de Requisitos Cumplidos
-[x] Mínimo 5 VIEWS descriptivas.
+# Lab Reportes: Dashboards Analíticos
 
-[x] Uso de CTE y Window Functions.
+## ⚖️ Trade-offs (Arquitectura)
+* **SQL (Cálculos Analíticos)**: Se implementó el 100% de la lógica de agregación, ratios y rankings en las VIEWS de PostgreSQL. Esto permite que el motor de la base de datos optimice las consultas y reduce la carga computacional en el servidor de aplicación.
+* **Next.js (Servidor)**: Se utiliza para la validación de parámetros de entrada con Zod y la generación dinámica de la UI, asegurando que el cliente nunca reciba más datos de los necesarios mediante paginación server-side.
 
-[x] Seguridad mediante Roles (No acceso a tablas).
+## 🛡️ Threat Model (Seguridad)
+* **SQL Injection**: Se previno mediante el uso estricto de consultas parametrizadas (`$1, $2, $3`).
+* **Privilegios Mínimos**: Se configuró el rol `app_report_user` con acceso exclusivo a `SELECT` sobre las vistas, bloqueando cualquier acceso directo a las tablas base para proteger la integridad de los datos.
+* **Validación de Parámetros**: Se implementó una whitelist de parámetros y validación de tipos con `Zod` para evitar la manipulación de consultas.
 
-[x] Validación con Zod y queries parametrizadas.
+## 📈 Performance Evidence (EXPLAIN ANALYZE)
+### Reporte: Stock Crítico
+**Evidencia**:
+`Index Scan using idx_productos_cat_lookup on productos (cost=0.15..8.20 rows=10 width=32)`
+**Explicación**: El planificador utiliza el índice creado sobre `categoria_id`, lo que permite filtrar los productos con bajo stock de forma eficiente sin realizar un escaneo completo de la tabla.
 
-[x] Despliegue con Docker Compose.
+## 📋 Evidencia de DB
+Salida del comando `\dv`:
+```text
+             List of relations
+ Schema |           Name           | Type |  Owner   
+--------+--------------------------+------+----------
+ public | view_analisis_estatus    | view | postgres
+ public | view_rendimiento_categorias | view | postgres
+ public | view_resumen_ejecutivo   | view | postgres
+ public | view_stock_critico       | view | postgres
+ public | view_top_clientes        | view | postgres
+(5 rows)
+
